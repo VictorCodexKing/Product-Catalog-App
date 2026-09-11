@@ -18,6 +18,7 @@ import ProductCard from '../components/ProductCard';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
+import LoadMoreError from '../components/LoadMoreError';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ProductList'>;
 
@@ -37,9 +38,11 @@ export default function ProductListScreen({ navigation }: Props) {
     refreshing,
     loadingMore,
     error,
+    loadMoreError,
     loadMore,
     retry,
     refresh,
+    retryLoadMore,
   } = useProducts(debouncedQuery);
 
   const handlePressProduct = useCallback(
@@ -55,6 +58,11 @@ export default function ProductListScreen({ navigation }: Props) {
   );
 
   const renderFooter = useCallback(() => {
+    if (loadMoreError) {
+      return (
+        <LoadMoreError message={loadMoreError.message} onRetry={retryLoadMore} />
+      );
+    }
     if (!loadingMore) {
       return null;
     }
@@ -63,7 +71,7 @@ export default function ProductListScreen({ navigation }: Props) {
         <ActivityIndicator color="#2563eb" />
       </View>
     );
-  }, [loadingMore]);
+  }, [loadMoreError, loadingMore, retryLoadMore]);
 
   const renderBody = () => {
     if (status === 'loading') {
@@ -89,7 +97,7 @@ export default function ProductListScreen({ navigation }: Props) {
         keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
-        onEndReached={hasMore ? loadMore : undefined}
+        onEndReached={hasMore && !loadMoreError ? loadMore : undefined}
         onEndReachedThreshold={0.4}
         ListFooterComponent={renderFooter}
         refreshControl={
