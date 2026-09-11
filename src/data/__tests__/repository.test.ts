@@ -14,6 +14,21 @@ function makeRawProduct(overrides: Partial<Product> = {}): Product {
     category: 'smartphones',
     stock: 94,
     discountPercentage: 12.96,
+    tags: ['smartphones', 'apple'],
+    availabilityStatus: 'In Stock',
+    weight: 4,
+    dimensions: { width: 15.14, height: 13.08, depth: 22.99 },
+    warrantyInformation: '1 year warranty',
+    shippingInformation: 'Ships in 3-5 business days',
+    reviews: [
+      {
+        rating: 4,
+        comment: 'Great!',
+        date: '2025-04-30T09:41:02.053Z',
+        reviewerName: 'Jane Doe',
+        reviewerEmail: 'jane.doe@x.dummyjson.com',
+      },
+    ],
     ...overrides,
   };
 }
@@ -93,6 +108,37 @@ describe('productRepository', () => {
 
     const result = await productRepository.getProducts(0);
     expect(result.products[0].images).toEqual([]);
+  });
+
+  it('maps the extended fields (tags, availabilityStatus, dimensions, reviews)', async () => {
+    mockJson(makeListResponse([makeRawProduct()], 0));
+
+    const result = await productRepository.getProducts(0);
+    const product = result.products[0];
+
+    expect(product.tags).toEqual(['smartphones', 'apple']);
+    expect(product.availabilityStatus).toBe('In Stock');
+    expect(product.weight).toBe(4);
+    expect(product.dimensions).toEqual({ width: 15.14, height: 13.08, depth: 22.99 });
+    expect(product.reviews).toHaveLength(1);
+    expect(product.reviews[0].reviewerName).toBe('Jane Doe');
+  });
+
+  it('normalises missing tags and reviews arrays to empty arrays', async () => {
+    const raw = makeListResponse(
+      [
+        makeRawProduct({
+          tags: undefined as unknown as string[],
+          reviews: undefined as unknown as Product['reviews'],
+        }),
+      ],
+      0,
+    );
+    mockJson(raw);
+
+    const result = await productRepository.getProducts(0);
+    expect(result.products[0].tags).toEqual([]);
+    expect(result.products[0].reviews).toEqual([]);
   });
 
   it('throws a descriptive error on a non-2xx response', async () => {
