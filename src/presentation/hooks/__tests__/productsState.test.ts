@@ -19,6 +19,8 @@ function makeProduct(id: number): Product {
     rating: 4,
     thumbnail: 'https://example.com/t.jpg',
     images: [],
+    tags: [],
+    reviews: [],
   };
 }
 

@@ -18,6 +18,13 @@ function mapProduct(raw: Product): Product {
     category: raw.category,
     stock: raw.stock,
     discountPercentage: raw.discountPercentage,
+    tags: Array.isArray(raw.tags) ? raw.tags : [],
+    availabilityStatus: raw.availabilityStatus,
+    weight: raw.weight,
+    dimensions: raw.dimensions,
+    warrantyInformation: raw.warrantyInformation,
+    shippingInformation: raw.shippingInformation,
+    reviews: Array.isArray(raw.reviews) ? raw.reviews : [],
   };
 }
 
