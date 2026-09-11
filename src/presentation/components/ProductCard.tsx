@@ -1,14 +1,7 @@
-import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Product } from '../../domain/product';
+import RemoteImage from './RemoteImage';
 
 interface Props {
   product: Product;
@@ -17,13 +10,10 @@ interface Props {
 
 /**
  * A single tappable product row showing its thumbnail, title, and price.
- * The thumbnail shows a lightweight spinner placeholder while loading and a
- * neutral fallback if the image fails to load.
+ * The thumbnail (via {@link RemoteImage}) shows a lightweight spinner
+ * placeholder while loading and a neutral fallback if the image fails.
  */
 export default function ProductCard({ product, onPress }: Props) {
-  const [imageLoading, setImageLoading] = useState(true);
-  const [imageError, setImageError] = useState(false);
-
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
@@ -31,27 +21,7 @@ export default function ProductCard({ product, onPress }: Props) {
       accessibilityRole="button"
       accessibilityLabel={`${product.title}, $${product.price.toFixed(2)}`}
     >
-      <View style={styles.thumbnailWrapper}>
-        {!imageError ? (
-          <Image
-            source={{ uri: product.thumbnail }}
-            style={styles.thumbnail}
-            resizeMode="cover"
-            onLoadEnd={() => setImageLoading(false)}
-            onError={() => {
-              setImageLoading(false);
-              setImageError(true);
-            }}
-          />
-        ) : (
-          <View style={styles.thumbnailFallback}>
-            <Text style={styles.thumbnailFallbackText}>No image</Text>
-          </View>
-        )}
-        {imageLoading && !imageError ? (
-          <ActivityIndicator style={styles.thumbnailSpinner} color="#6b7280" />
-        ) : null}
-      </View>
+      <RemoteImage uri={product.thumbnail} style={styles.thumbnail} />
 
       <View style={styles.details}>
         <Text style={styles.title} numberOfLines={2}>
@@ -78,31 +48,10 @@ const styles = StyleSheet.create({
   cardPressed: {
     backgroundColor: '#f3f4f6',
   },
-  thumbnailWrapper: {
+  thumbnail: {
     width: 64,
     height: 64,
     borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#f3f4f6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  thumbnail: {
-    width: '100%',
-    height: '100%',
-  },
-  thumbnailSpinner: {
-    position: 'absolute',
-  },
-  thumbnailFallback: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  thumbnailFallbackText: {
-    fontSize: 11,
-    color: '#9ca3af',
   },
   details: {
     flex: 1,
