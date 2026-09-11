@@ -1,46 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { productRepository } from '../../data/productRepository';
-import type { Product } from '../../domain/product';
+import type { ProductListResponse } from '../../domain/product';
+import {
+  INITIAL_STATE,
+  appendPage,
+  canLoadMore,
+  deriveHasMore,
+  resolveLoadMoreError,
+  type ProductsState,
+} from './productsState';
 
-/** The high-level status of the product list, driving which view is rendered. */
-export type ProductsStatus = 'loading' | 'error' | 'empty' | 'success';
-
-/** The full state exposed by {@link useProducts}. */
-export interface ProductsState {
-  status: ProductsStatus;
-  products: Product[];
-  page: number;
-  hasMore: boolean;
-  /** True while a pull-to-refresh is in flight. */
-  refreshing: boolean;
-  /** True while an additional page is being appended. */
-  loadingMore: boolean;
-  error: Error | null;
-}
+export type { ProductsState, ProductsStatus } from './productsState';
 
 /** The state plus the actions the UI can trigger. */
 export interface UseProductsResult extends ProductsState {
   loadMore: () => void;
   retry: () => void;
   refresh: () => void;
+  /** Re-attempts the next page after a load-more failure. */
+  retryLoadMore: () => void;
 }
-
-const INITIAL_STATE: ProductsState = {
-  status: 'loading',
-  products: [],
-  page: 0,
-  hasMore: false,
-  refreshing: false,
-  loadingMore: false,
-  error: null,
-};
 
 /**
  * Loads a zero-based page from the repository, choosing the browse or search
  * endpoint depending on whether a query is present.
  */
-function fetchPage(query: string, page: number) {
+function fetchPage(query: string, page: number): Promise<ProductListResponse> {
   const trimmed = query.trim();
   return trimmed.length > 0
     ? productRepository.search(trimmed, page)
@@ -58,6 +44,10 @@ export function useProducts(query: string): UseProductsResult {
 
   // Guards against out-of-order responses when the query changes mid-flight.
   const requestIdRef = useRef(0);
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   const loadFirstPage = useCallback(
     async (q: string, mode: 'initial' | 'refresh') => {
@@ -68,6 +58,7 @@ export function useProducts(query: string): UseProductsResult {
         status: mode === 'initial' ? 'loading' : prev.status,
         refreshing: mode === 'refresh',
         error: null,
+        loadMoreError: null,
       }));
 
       try {
@@ -76,15 +67,17 @@ export function useProducts(query: string): UseProductsResult {
           return;
         }
         const loaded = response.products.length;
-        setState({
+        setState((prev) => ({
+          ...prev,
           status: loaded === 0 ? 'empty' : 'success',
           products: response.products,
           page: 0,
-          hasMore: loaded < response.total,
+          hasMore: deriveHasMore(loaded, loaded, response.total),
           refreshing: false,
           loadingMore: false,
           error: null,
-        });
+          loadMoreError: null,
+        }));
       } catch (err) {
         if (requestId !== requestIdRef.current) {
           return;
@@ -106,50 +99,49 @@ export function useProducts(query: string): UseProductsResult {
     loadFirstPage(query, 'initial');
   }, [query, loadFirstPage]);
 
-  const loadMore = useCallback(() => {
-    setState((prev) => {
-      if (
-        prev.status !== 'success' ||
-        !prev.hasMore ||
-        prev.loadingMore ||
-        prev.refreshing
-      ) {
-        return prev;
-      }
+  // Fires the next-page fetch as a plain side effect (never from inside a
+  // setState updater). Eligibility is read from stateRef, and loadingMore is
+  // flipped in state before the request goes out. Reading the guard from a ref
+  // (rather than the updater's `prev`) avoids double-firing under StrictMode,
+  // which invokes updaters twice.
+  const startLoadMore = useCallback(() => {
+    if (!canLoadMore(stateRef.current)) {
+      return;
+    }
 
-      const nextPage = prev.page + 1;
-      const requestId = ++requestIdRef.current;
+    const nextPage = stateRef.current.page + 1;
+    const requestId = ++requestIdRef.current;
 
-      fetchPage(query, nextPage)
-        .then((response) => {
-          if (requestId !== requestIdRef.current) {
-            return;
-          }
-          setState((current) => {
-            const products = [...current.products, ...response.products];
-            return {
-              ...current,
-              products,
-              page: nextPage,
-              hasMore: products.length < response.total,
-              loadingMore: false,
-            };
-          });
-        })
-        .catch((err: unknown) => {
-          if (requestId !== requestIdRef.current) {
-            return;
-          }
-          setState((current) => ({
-            ...current,
-            loadingMore: false,
-            error: err instanceof Error ? err : new Error(String(err)),
-          }));
-        });
+    setState((prev) => ({ ...prev, loadingMore: true, loadMoreError: null }));
 
-      return { ...prev, loadingMore: true };
-    });
+    fetchPage(query, nextPage)
+      .then((response) => {
+        if (requestId !== requestIdRef.current) {
+          return;
+        }
+        setState((current) => appendPage(current, response, nextPage));
+      })
+      .catch((err: unknown) => {
+        if (requestId !== requestIdRef.current) {
+          return;
+        }
+        const error = err instanceof Error ? err : new Error(String(err));
+        setState((current) => resolveLoadMoreError(current, error));
+      });
   }, [query]);
+
+  const loadMore = useCallback(() => {
+    // A pending load-more error suppresses scroll-triggered auto-loading so the
+    // user is not silently retried; recovery is explicit via retryLoadMore.
+    if (stateRef.current.loadMoreError) {
+      return;
+    }
+    startLoadMore();
+  }, [startLoadMore]);
+
+  const retryLoadMore = useCallback(() => {
+    startLoadMore();
+  }, [startLoadMore]);
 
   const retry = useCallback(() => {
     loadFirstPage(query, 'initial');
@@ -159,5 +151,5 @@ export function useProducts(query: string): UseProductsResult {
     loadFirstPage(query, 'refresh');
   }, [query, loadFirstPage]);
 
-  return { ...state, loadMore, retry, refresh };
+  return { ...state, loadMore, retry, refresh, retryLoadMore };
 }
