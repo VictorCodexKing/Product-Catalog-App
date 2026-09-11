@@ -30,9 +30,6 @@ npx expo start       # start the Expo dev server
 Then open the app on a device/emulator via the Expo Go app or a simulator
 (press `a` for Android, `i` for iOS, or scan the QR code).
 
-> **Note:** No Android/iOS emulator or device was available in the development
-> sandbox, so the app could not be launched on-device here. Validation was done
-> headlessly via the type checker, linter, and unit tests:
 >
 > ```bash
 > npx tsc --noEmit     # or: npm run typecheck
