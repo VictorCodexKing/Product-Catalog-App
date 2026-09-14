@@ -56,6 +56,14 @@ export interface ProductListResponse {
   limit: number;
 }
 
+/** A selectable product category. */
+export interface Category {
+  /** API slug used for filtering, e.g. "home-decoration". */
+  slug: string;
+  /** Human-readable label, e.g. "Home Decoration". */
+  name: string;
+}
+
 /**
  * Derives whether a product is considered in stock.
  *

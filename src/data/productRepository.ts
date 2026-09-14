@@ -1,5 +1,11 @@
 import * as api from './api';
-import { PAGE_SIZE, type Product, type ProductListResponse } from '../domain/product';
+import type { RawCategory } from './api';
+import {
+  PAGE_SIZE,
+  type Category,
+  type Product,
+  type ProductListResponse,
+} from '../domain/product';
 
 /**
  * Maps a raw API product into the domain `Product` shape, defensively
@@ -61,6 +67,25 @@ export const productRepository = {
     const skip = page * PAGE_SIZE;
     const raw = await api.searchProducts({ q: query, limit: PAGE_SIZE, skip });
     return mapListResponse(raw);
+  },
+
+  /** Loads a zero-based page of products filtered to a category slug. */
+  async getProductsByCategory(
+    slug: string,
+    page: number,
+  ): Promise<ProductListResponse> {
+    const skip = page * PAGE_SIZE;
+    const raw = await api.fetchProductsByCategory({ slug, limit: PAGE_SIZE, skip });
+    return mapListResponse(raw);
+  },
+
+  /** Loads the full list of selectable categories. */
+  async getCategories(): Promise<Category[]> {
+    const raw = await api.fetchCategories();
+    return (Array.isArray(raw) ? raw : []).map((c: RawCategory) => ({
+      slug: c.slug,
+      name: c.name,
+    }));
   },
 };
 

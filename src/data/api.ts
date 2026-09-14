@@ -51,3 +51,31 @@ export function searchProducts({
     `/products/search?q=${query}&limit=${limit}&skip=${skip}`,
   );
 }
+
+/** A product category as returned by DummyJSON. */
+export interface RawCategory {
+  slug: string;
+  name: string;
+  url: string;
+}
+
+/** Fetches the full list of product categories. GET /products/categories */
+export function fetchCategories(): Promise<RawCategory[]> {
+  return getJson<RawCategory[]>('/products/categories');
+}
+
+/** Fetches a page of products within a category. GET /products/category/{slug} */
+export function fetchProductsByCategory({
+  slug,
+  limit,
+  skip,
+}: {
+  slug: string;
+  limit: number;
+  skip: number;
+}): Promise<ProductListResponse> {
+  const encoded = encodeURIComponent(slug);
+  return getJson<ProductListResponse>(
+    `/products/category/${encoded}?limit=${limit}&skip=${skip}`,
+  );
+}

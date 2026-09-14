@@ -1,27 +1,24 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import {
-  filterProducts,
-  uniqueCategories,
-  type Product,
-  type StatusFilter,
-} from '../../domain/product';
+import type { Product } from '../../domain/product';
 import type { RootStackParamList } from '../navigation/types';
 import { useDebounce } from '../hooks/useDebounce';
 import { useProducts } from '../hooks/useProducts';
+import { useCategories } from '../hooks/useCategories';
 import ProductCard from '../components/ProductCard';
-import FilterBar from '../components/FilterBar';
+import SearchBar from '../components/SearchBar';
+import CategoryCarousel from '../components/CategoryCarousel';
+import NotificationBell from '../components/NotificationBell';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
@@ -31,20 +28,18 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ProductList'>;
 
 /**
  * The product catalog list screen: a debounced search box over a paginated
- * FlatList of products, with Status/Category filter chips and distinct
- * loading / error / empty / success views.
+ * FlatList of products, with distinct loading / error / empty / success views.
  *
- * Search is server-side (resets pagination for the query); the Status and
- * Category chips are lightweight client-side filters applied to the products
- * loaded so far, via the pure `filterProducts` domain helper.
+ * Search is server-side (resets pagination for the query).
  */
 export default function ProductListScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 400);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const { categories } = useCategories();
+  const searching = debouncedQuery.trim().length > 0;
 
   const {
     status,
@@ -58,15 +53,7 @@ export default function ProductListScreen({ navigation }: Props) {
     retry,
     refresh,
     retryLoadMore,
-  } = useProducts(debouncedQuery);
-
-  const categories = useMemo(() => uniqueCategories(products), [products]);
-  const visibleProducts = useMemo(
-    () => filterProducts(products, statusFilter, categoryFilter),
-    [products, statusFilter, categoryFilter],
-  );
-
-  const filtersActive = statusFilter !== 'all' || categoryFilter !== null;
+  } = useProducts(debouncedQuery, selectedCategory);
 
   const handlePressProduct = useCallback(
     (id: number) => navigation.navigate('ProductDetail', { id }),
@@ -96,20 +83,6 @@ export default function ProductListScreen({ navigation }: Props) {
     );
   }, [loadMoreError, loadingMore, retryLoadMore]);
 
-  const renderEmptyList = useCallback(() => {
-    // Success status but the active filters hid every loaded product.
-    if (filtersActive) {
-      return (
-        <View style={styles.filterEmpty}>
-          <Text style={styles.filterEmptyText}>
-            No loaded products match the selected filters.
-          </Text>
-        </View>
-      );
-    }
-    return null;
-  }, [filtersActive]);
-
   const renderBody = () => {
     if (status === 'loading') {
       return <LoadingState />;
@@ -130,14 +103,13 @@ export default function ProductListScreen({ navigation }: Props) {
     }
     return (
       <FlatList
-        data={visibleProducts}
+        data={products}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         onEndReached={hasMore && !loadMoreError ? loadMore : undefined}
         onEndReachedThreshold={0.4}
         ListFooterComponent={renderFooter}
-        ListEmptyComponent={renderEmptyList}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={refresh} />
         }
@@ -147,26 +119,19 @@ export default function ProductListScreen({ navigation }: Props) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.searchBar}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search products…"
-          placeholderTextColor="#9ca3af"
-          value={query}
-          onChangeText={setQuery}
-          autoCorrect={false}
-          returnKeyType="search"
-          clearButtonMode="while-editing"
-          accessibilityLabel="Search products"
-        />
+      <View style={styles.header}>
+        <View style={styles.headerSpacer} />
+        <NotificationBell hasUnread />
       </View>
-      <FilterBar
-        status={statusFilter}
-        onStatusChange={setStatusFilter}
-        category={categoryFilter}
-        categories={categories}
-        onCategoryChange={setCategoryFilter}
-      />
+      <Text style={styles.heading}>Find your{'\n'}favourite product</Text>
+      <SearchBar value={query} onChangeText={setQuery} placeholder="Search products" />
+      {!searching ? (
+        <CategoryCarousel
+          categories={categories}
+          selected={selectedCategory}
+          onSelect={setSelectedCategory}
+        />
+      ) : null}
       <View style={styles.body}>{renderBody()}</View>
     </View>
   );
@@ -175,23 +140,29 @@ export default function ProductListScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  searchBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
     backgroundColor: '#ffffff',
   },
-  searchInput: {
-    backgroundColor: '#f3f4f6',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  headerSpacer: {
+    flex: 1,
+  },
+  heading: {
+    fontSize: 28,
+    fontWeight: '800',
     color: '#111827',
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    lineHeight: 34,
   },
   body: {
     flex: 1,
+    backgroundColor: '#f9fafb',
   },
   listContent: {
     paddingVertical: 8,
@@ -199,14 +170,5 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingVertical: 16,
-  },
-  filterEmpty: {
-    padding: 32,
-    alignItems: 'center',
-  },
-  filterEmptyText: {
-    fontSize: 15,
-    color: '#6b7280',
-    textAlign: 'center',
   },
 });
