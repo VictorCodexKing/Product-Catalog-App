@@ -14,8 +14,10 @@ import type { Product } from '../../domain/product';
 import type { RootStackParamList } from '../navigation/types';
 import { useDebounce } from '../hooks/useDebounce';
 import { useProducts } from '../hooks/useProducts';
+import { useCategories } from '../hooks/useCategories';
 import ProductCard from '../components/ProductCard';
 import SearchBar from '../components/SearchBar';
+import CategoryCarousel from '../components/CategoryCarousel';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
@@ -33,6 +35,10 @@ export default function ProductListScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 400);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  const { categories } = useCategories();
+  const searching = debouncedQuery.trim().length > 0;
 
   const {
     status,
@@ -46,7 +52,7 @@ export default function ProductListScreen({ navigation }: Props) {
     retry,
     refresh,
     retryLoadMore,
-  } = useProducts(debouncedQuery);
+  } = useProducts(debouncedQuery, selectedCategory);
 
   const handlePressProduct = useCallback(
     (id: number) => navigation.navigate('ProductDetail', { id }),
@@ -114,6 +120,13 @@ export default function ProductListScreen({ navigation }: Props) {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <Text style={styles.heading}>Find your{'\n'}favourite product</Text>
       <SearchBar value={query} onChangeText={setQuery} placeholder="Search products" />
+      {!searching ? (
+        <CategoryCarousel
+          categories={categories}
+          selected={selectedCategory}
+          onSelect={setSelectedCategory}
+        />
+      ) : null}
       <View style={styles.body}>{renderBody()}</View>
     </View>
   );

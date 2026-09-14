@@ -146,4 +146,37 @@ describe('productRepository', () => {
 
     await expect(productRepository.getProducts(0)).rejects.toThrow(/failed with status 500/);
   });
+
+  it('getProductsByCategory builds the /products/category/{slug} URL with paging', async () => {
+    mockJson(makeListResponse([makeRawProduct({ id: 5 })], PAGE_SIZE));
+
+    const result = await productRepository.getProductsByCategory('home-decoration', 1);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://dummyjson.com/products/category/home-decoration?limit=${PAGE_SIZE}&skip=${PAGE_SIZE}`,
+    );
+    expect(result.products[0].id).toBe(5);
+  });
+
+  it('getCategories maps raw categories to { slug, name }', async () => {
+    mockJson([
+      { slug: 'beauty', name: 'Beauty', url: 'https://x/beauty' },
+      { slug: 'home-decoration', name: 'Home Decoration', url: 'https://x/hd' },
+    ]);
+
+    const categories = await productRepository.getCategories();
+
+    expect(fetchMock).toHaveBeenCalledWith('https://dummyjson.com/products/categories');
+    expect(categories).toEqual([
+      { slug: 'beauty', name: 'Beauty' },
+      { slug: 'home-decoration', name: 'Home Decoration' },
+    ]);
+  });
+
+  it('getCategories normalises a non-array response to an empty list', async () => {
+    mockJson(null);
+
+    const categories = await productRepository.getCategories();
+    expect(categories).toEqual([]);
+  });
 });

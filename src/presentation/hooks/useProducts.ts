@@ -23,23 +23,33 @@ export interface UseProductsResult extends ProductsState {
 }
 
 /**
- * Loads a zero-based page from the repository, choosing the browse or search
- * endpoint depending on whether a query is present.
+ * Loads a zero-based page from the repository, choosing the endpoint by intent:
+ * a non-empty search query wins, otherwise a selected category filters
+ * server-side, otherwise the plain browse endpoint is used.
  */
-function fetchPage(query: string, page: number): Promise<ProductListResponse> {
+function fetchPage(
+  query: string,
+  category: string | null,
+  page: number,
+): Promise<ProductListResponse> {
   const trimmed = query.trim();
-  return trimmed.length > 0
-    ? productRepository.search(trimmed, page)
-    : productRepository.getProducts(page);
+  if (trimmed.length > 0) {
+    return productRepository.search(trimmed, page);
+  }
+  if (category) {
+    return productRepository.getProductsByCategory(category, page);
+  }
+  return productRepository.getProducts(page);
 }
 
 /**
  * Manages the product list state machine: initial load, pagination via
  * `loadMore`, error recovery via `retry`, and pull-to-refresh via `refresh`.
- * When `query` changes the list resets to page 0. Search uses the server-side
- * DummyJSON `/products/search` endpoint (via `productRepository.search`).
+ * When `query` or `category` changes the list resets to page 0. Search uses the
+ * server-side `/products/search` endpoint; a selected category uses the
+ * server-side `/products/category/{slug}` endpoint.
  */
-export function useProducts(query: string): UseProductsResult {
+export function useProducts(query: string, category: string | null = null): UseProductsResult {
   const [state, setState] = useState<ProductsState>(INITIAL_STATE);
 
   // Guards against out-of-order responses when the query changes mid-flight.
@@ -62,7 +72,7 @@ export function useProducts(query: string): UseProductsResult {
       }));
 
       try {
-        const response = await fetchPage(q, 0);
+        const response = await fetchPage(q, category, 0);
         if (requestId !== requestIdRef.current) {
           return;
         }
@@ -91,10 +101,10 @@ export function useProducts(query: string): UseProductsResult {
         }));
       }
     },
-    [],
+    [category],
   );
 
-  // (Re)load the first page whenever the (debounced) query changes.
+  // (Re)load the first page whenever the (debounced) query or category changes.
   useEffect(() => {
     loadFirstPage(query, 'initial');
   }, [query, loadFirstPage]);
@@ -114,7 +124,7 @@ export function useProducts(query: string): UseProductsResult {
 
     setState((prev) => ({ ...prev, loadingMore: true, loadMoreError: null }));
 
-    fetchPage(query, nextPage)
+    fetchPage(query, category, nextPage)
       .then((response) => {
         if (requestId !== requestIdRef.current) {
           return;
@@ -128,7 +138,7 @@ export function useProducts(query: string): UseProductsResult {
         const error = err instanceof Error ? err : new Error(String(err));
         setState((current) => resolveLoadMoreError(current, error));
       });
-  }, [query]);
+  }, [query, category]);
 
   const loadMore = useCallback(() => {
     // A pending load-more error suppresses scroll-triggered auto-loading so the
