@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import {
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,6 +22,7 @@ import { useProductDetail } from '../hooks/useProductDetail';
 import RemoteImage from '../components/RemoteImage';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
+import AddToCartSheet from '../components/AddToCartSheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ProductDetail'>;
 
@@ -87,9 +90,18 @@ function DimensionCell({ label, value }: { label: string; value: string }) {
  * original price), rating, brand/category, full description, dimensions, and
  * the full list of reviews with their ratings.
  */
-function ProductDetail({ product }: { product: Product }) {
+function ProductDetail({
+  product,
+  onBuyNow,
+}: {
+  product: Product;
+  onBuyNow: (quantity: number) => void;
+}) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  // Bumped on each open so the sheet remounts and its quantity resets to 1.
+  const [openCount, setOpenCount] = useState(0);
   const galleryImages = product.images.length > 0 ? product.images : [product.thumbnail];
   const meta = [product.brand, product.category].filter(Boolean).join(' • ');
   const inStock = isInStock(product);
@@ -100,11 +112,17 @@ function ProductDetail({ product }: { product: Product }) {
   const dims = product.dimensions;
   const reviews = product.reviews ?? [];
 
+  const handleBuyNow = (quantity: number) => {
+    setSheetOpen(false);
+    onBuyNow(quantity);
+  };
+
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
-    >
+    <View style={styles.screen}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+      >
       <ScrollView
         horizontal
         pagingEnabled
@@ -199,7 +217,42 @@ function ProductDetail({ product }: { product: Product }) {
           <Text style={styles.noReviews}>No reviews yet.</Text>
         )}
       </View>
-    </ScrollView>
+      </ScrollView>
+
+      {/* Static footer: stays fixed while the content above scrolls. */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+        <View style={styles.footerPrice}>
+          <Text style={styles.footerPriceValue}>{`$${product.price.toFixed(2)}`}</Text>
+          <Text style={styles.footerPriceLabel}>Price</Text>
+        </View>
+        <Pressable
+          style={({ pressed }) => [
+            styles.addBtn,
+            !inStock && styles.addBtnDisabled,
+            pressed && inStock && styles.addBtnPressed,
+          ]}
+          onPress={() => {
+            setOpenCount((c) => c + 1);
+            setSheetOpen(true);
+          }}
+          disabled={!inStock}
+          accessibilityRole="button"
+          accessibilityLabel={inStock ? 'Add to cart' : 'Out of stock'}
+        >
+          <Text style={styles.addBtnText}>
+            {inStock ? 'Add to Cart' : 'Out of Stock'}
+          </Text>
+        </Pressable>
+      </View>
+
+      <AddToCartSheet
+        key={openCount}
+        visible={sheetOpen}
+        product={product}
+        onClose={() => setSheetOpen(false)}
+        onBuyNow={handleBuyNow}
+      />
+    </View>
   );
 }
 
@@ -208,7 +261,7 @@ function ProductDetail({ product }: { product: Product }) {
  * product via {@link useProductDetail}, and shows distinct loading / error
  * (with Retry) / success views.
  */
-export default function ProductDetailScreen({ route }: Props) {
+export default function ProductDetailScreen({ route, navigation }: Props) {
   const { id } = route.params;
   const { status, product, error, retry } = useProductDetail(id);
 
@@ -218,16 +271,70 @@ export default function ProductDetailScreen({ route }: Props) {
   if (status === 'error' || !product) {
     return <ErrorState message={error?.message} onRetry={retry} />;
   }
-  return <ProductDetail product={product} />;
+
+  const handleBuyNow = (quantity: number) => {
+    navigation.navigate('Checkout', {
+      productId: product.id,
+      title: product.title,
+      unitPrice: product.price,
+      quantity,
+    });
+  };
+
+  return <ProductDetail product={product} onBuyNow={handleBuyNow} />;
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
   scroll: {
     flex: 1,
     backgroundColor: '#ffffff',
   },
   content: {
     flexGrow: 1,
+    paddingBottom: 24,
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    backgroundColor: '#ffffff',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e5e7eb',
+  },
+  footerPrice: {
+    marginRight: 16,
+  },
+  footerPriceValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  footerPriceLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  addBtn: {
+    flex: 1,
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  addBtnDisabled: {
+    backgroundColor: '#9ca3af',
+  },
+  addBtnPressed: {
+    opacity: 0.85,
+  },
+  addBtnText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   gallery: {
     backgroundColor: '#f3f4f6',

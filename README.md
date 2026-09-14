@@ -11,10 +11,17 @@ success states.
   stock, an **availability pill** ("In Stock" / "Out of Stock"), a **discount
   badge** on the thumbnail, and the product's **tags** (e.g. `beauty`,
   `mascara`) instead of a single colour swatch.
-- **Status & Category filters** — two dropdown-style filter chips below the
-  search box (modelled on the reference design). Status filters by availability
-  (All / In Stock / Out of Stock); Category filters by the categories present in
-  the loaded products. Filtering is pure, client-side, and unit-tested.
+- **Rounded search bar** — a modern pill search field with a dark circular
+  search affordance (modelled on the reference), under a "Find your favourite
+  product" heading. The old Status/Category filter chips have been removed.
+- **Category carousel** — a horizontally scrolling row of category buttons
+  listing **every** category from `GET /products/categories` (plus an "All"
+  chip). Selecting one filters **server-side** via `/products/category/{slug}`
+  and resets pagination; the carousel hides while a text search is active
+  (search wins).
+- **Notification bell** — a circular bell button with an unread red-dot badge
+  in the top-right of the list header (placeholder for a future notifications
+  screen).
 - **Pagination** — additional pages load automatically as you scroll, using the
   DummyJSON `skip` parameter (20 items per page).
 - **Product detail** — tap a product to see its image gallery, availability
@@ -22,6 +29,11 @@ success states.
   discount %), rating (stars + numeric + review count), brand/category, tags,
   the **full description**, a **dimensions** grid (width/height/depth/weight),
   and the **full list of reviews** (reviewer, star rating, comment, date).
+- **Add to Cart flow** — the detail screen has a **static footer** with an
+  "Add to Cart" button that stays fixed while the content (including reviews)
+  scrolls. Tapping it opens a bottom-sheet popup with a quantity stepper
+  (bounded by stock) and a live total; "Buy Now" navigates to a **Checkout**
+  screen (order summary placeholder; payment is a documented TODO).
 - **Distinct states** — visually separated loading (blue spinner), error (red
   panel with a **Retry** button), empty (neutral), and success views, on both
   the list and the detail screen.
@@ -83,11 +95,12 @@ responsibility. Dependencies flow inward: `presentation` depends on `data`,
   point the UI reads product data through.
 - **`src/presentation`** — Everything UI. Organized into `navigation` (stack
   routes and param types), `screens` (`ProductListScreen`, `ProductDetailScreen`),
-  `components` (`ProductCard`, `FilterBar`, `RemoteImage`, and the `LoadingState` /
+  `components` (`ProductCard`, `SearchBar`, `CategoryCarousel`,
+  `NotificationBell`, `AddToCartSheet`, `RemoteImage`, and the `LoadingState` /
   `ErrorState` / `EmptyState` views), and `hooks` (`useProducts`,
-  `useProductDetail`, `useDebounce`) that own the fetch state machines. The
-  screens read stock/discount/filter behaviour from the pure `domain` helpers
-  rather than embedding those rules in components.
+  `useProductDetail`, `useCategories`, `useDebounce`) that own the fetch state
+  machines. The screens read stock/discount behaviour from the pure `domain`
+  helpers rather than embedding those rules in components.
 
 Keeping the fetch/state logic in hooks and the pure logic in `domain` keeps the
 screens thin and makes the data/business logic straightforward to unit test
@@ -110,21 +123,26 @@ client-side filtering.** Reasons:
 Search input is debounced by 400 ms so we issue at most one request per pause in
 typing, and changing the query resets the list to the first page.
 
-### Filter decision: client-side
+### Category filter: server-side
 
-The **Status** and **Category** filter chips are applied **client-side** to the
-products already loaded, not via extra API calls. Reasons:
+The category carousel filters **server-side** via
+`GET /products/category/{slug}` rather than filtering loaded items in memory.
+Reasons:
 
-- DummyJSON has no combined "status + category" query parameter, so honoring
-  both filters server-side would mean multiple round-trips and reconciling
-  pagination across them.
-- The filters are cheap set/predicate operations over the in-memory page, so
-  they respond instantly with no network latency.
-- The rules are pure functions (`filterProducts`, `uniqueCategories`,
-  `isInStock`) that are straightforward to unit test.
+- The category endpoint returns the same paginated `{ products, total, skip,
+  limit }` shape, so the existing `skip`-based pagination works unchanged.
+- Selecting a category then returns the full catalog for that category, not
+  just whichever items happened to be loaded already.
+- The category list itself comes from `GET /products/categories`, so the
+  carousel always reflects the real, complete set of categories.
 
-The trade-off is documented below: because filtering is client-side, it only
-narrows the products already fetched, not the entire remote catalog.
+Search and category are mutually exclusive by design: an active text search
+takes priority (the carousel is hidden while searching), and clearing the
+search restores category browsing.
+
+> The earlier pure helpers `filterProducts` / `uniqueCategories` remain in the
+> `domain` layer (and stay unit-tested) as reusable client-side utilities, even
+> though the live category filter is now server-side.
 
 ## Bonus items implemented
 
@@ -147,11 +165,15 @@ narrows the products already fetched, not the entire remote catalog.
   app pins `19.2.3`), so component/render tests were skipped in favor of the
   data/business-logic unit tests. This could be revisited by pinning
   `react-test-renderer@19.2.x` or adopting `@testing-library/react-native`.
-- **Filters are client-side only.** The Status/Category chips narrow the
-  products already loaded into memory, not the full remote catalog. A product
-  that matches a filter but hasn't been paged in yet won't appear until you
-  scroll far enough to load it. Moving category filtering server-side (DummyJSON
-  exposes `/products/category/{slug}`) is a possible follow-up.
+- **Checkout is a placeholder.** "Buy Now" navigates to a Checkout screen that
+  only summarises the item, quantity, and total. Real payment / order placement
+  is a TODO.
+- **No cart persistence.** There is no persistent cart or badge count; "Add to
+  Cart" opens the quantity sheet and goes straight to Buy Now (single-item
+  purchase). A real cart with add/remove and a bottom-nav cart badge is a
+  follow-up.
+- **Notifications are a placeholder.** The bell shows an unread dot but has no
+  notifications screen yet.
 - **No offline caching / persistence.** Data is always fetched fresh; there is no
   local cache or optimistic offline support.
 - **No retry/backoff or request cancellation at the network layer** beyond the
