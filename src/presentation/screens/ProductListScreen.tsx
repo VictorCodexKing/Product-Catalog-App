@@ -18,6 +18,7 @@ import { useCategories } from '../hooks/useCategories';
 import ProductCard from '../components/ProductCard';
 import SearchBar from '../components/SearchBar';
 import CategoryCarousel from '../components/CategoryCarousel';
+import NotificationBell from '../components/NotificationBell';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
@@ -118,6 +119,10 @@ export default function ProductListScreen({ navigation }: Props) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <View style={styles.headerSpacer} />
+        <NotificationBell hasUnread />
+      </View>
       <Text style={styles.heading}>Find your{'\n'}favourite product</Text>
       <SearchBar value={query} onChangeText={setQuery} placeholder="Search products" />
       {!searching ? (
@@ -137,12 +142,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  headerSpacer: {
+    flex: 1,
+  },
   heading: {
     fontSize: 28,
     fontWeight: '800',
     color: '#111827',
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 4,
     lineHeight: 34,
   },
   body: {
